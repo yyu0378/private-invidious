@@ -85,7 +85,7 @@ CURRENT_VERSION = {{ "#{`git log -1 --format=%ci | awk '{print $1}' | sed s/-/./
 ASSET_COMMIT = {{ "#{`git rev-list HEAD --max-count=1 --abbrev-commit -- assets`.strip}" }}
 
 SOFTWARE = {
-  "name"    => "private-invidious",
+  "name"    => "invidious",
   "version" => "#{CURRENT_VERSION}-#{CURRENT_COMMIT}",
   "branch"  => "#{CURRENT_BRANCH}",
 }
