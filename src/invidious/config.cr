@@ -48,7 +48,7 @@ struct ConfigPreferences
   def to_tuple
     {% begin %}
       {
-        {{(@type.instance_vars.map { |var| "#{var.name}: #{var.name}".id }).splat}}
+        {{*@type.instance_vars.map { |var| "#{var.name}: #{var.name}".id }}}
       }
     {% end %}
   end
@@ -92,6 +92,8 @@ class Config
   property use_pubsub_feeds : Bool | Int32 = false
   property popular_enabled : Bool = true
   property captcha_enabled : Bool = true
+  # Only allow usage of the Invidious instance with an existing account
+  property private_instance : Bool = false
   property login_enabled : Bool = true
   property registration_enabled : Bool = true
   property statistics_enabled : Bool = false
@@ -133,6 +135,10 @@ class Config
   # Saved cookies in "name1=value1; name2=value2..." format
   @[YAML::Field(converter: Preferences::StringToCookies)]
   property cookies : HTTP::Cookies = HTTP::Cookies.new
+  # Key for Anti-Captcha
+  property captcha_key : String? = nil
+  # API URL for Anti-Captcha
+  property captcha_api_url : String = "https://api.anti-captcha.com"
 
   # Playlist length limit
   property playlist_length_limit : Int32 = 500
