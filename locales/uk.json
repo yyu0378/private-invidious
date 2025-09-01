@@ -21,7 +21,7 @@
     "Import and Export Data": "Імпорт і експорт даних",
     "Import": "Імпорт",
     "Import Invidious data": "Імпортувати JSON-дані Invidious",
-    "Import YouTube subscriptions": "Імпортувати підписки з YouTube чи OPML",
+    "Import YouTube subscriptions": "Імпортувати підписки YouTube з CSV чи OPML",
     "Import FreeTube subscriptions (.db)": "Імпортувати підписки з FreeTube (.db)",
     "Import NewPipe subscriptions (.json)": "Імпортувати підписки з NewPipe (.json)",
     "Import NewPipe data (.zip)": "Імпортувати дані з NewPipe (.zip)",
@@ -455,7 +455,7 @@
     "search_filters_date_option_week": "Цей тиждень",
     "search_filters_type_label": "Тип",
     "search_filters_type_option_channel": "Канал",
-    "search_message_use_another_instance": " Можете також <a href=\"`x`\">пошукати іншим сервером</a>.",
+    "search_message_use_another_instance": "Можете також <a href=\"`x`\">пошукати на іншому сервері</a>.",
     "search_filters_title": "Фільтри",
     "search_filters_date_option_hour": "Остання година",
     "search_filters_date_option_month": "Цей місяць",
@@ -472,7 +472,7 @@
     "search_filters_features_option_three_sixty": "360°",
     "search_filters_features_option_hdr": "HDR",
     "search_filters_sort_label": "Спершу",
-    "search_filters_sort_option_date": "Нещодавні",
+    "search_filters_sort_option_date": "Дата вивантаження",
     "search_filters_apply_button": "Застосувати фільтри",
     "search_filters_features_option_vr180": "VR180",
     "search_filters_features_option_purchased": "Придбано",
@@ -513,5 +513,10 @@
     "The Popular feed has been disabled by the administrator.": "Стрічка Популярні вимкнена адміністратором.",
     "carousel_slide": "Слайд {{current}} з {{total}}",
     "carousel_skip": "Пропустити карусель",
-    "carousel_go_to": "Перейти до слайда `x`"
+    "carousel_go_to": "Перейти до слайда `x`",
+    "preferences_preload_label": "Попереднє завантаження відеоданих: ",
+    "Filipino (auto-generated)": "Філіппінська (згенеровано автоматично)",
+    "First page": "Перша сторінка",
+    "channel_tab_courses_label": "Курси",
+    "channel_tab_posts_label": "Дописи"
 }

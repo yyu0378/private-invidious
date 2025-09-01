@@ -51,8 +51,18 @@ module Invidious::Routes::Search
     else
       user = env.get? "user"
 
+      # An URL was copy/pasted in the search box.
+      # Redirect the user to the appropriate page.
+      if query.url?
+        return env.redirect UrlSanitizer.process(query.text).to_s
+      end
+
       begin
-        items = query.process
+        if user
+          items = query.process(user.as(User))
+        else
+          items = query.process
+        end
       rescue ex : ChannelSearchException
         return error_template(404, "Unable to find channel with id of '#{HTML.escape(ex.channel)}'. Are you sure that's an actual channel id? It should look like 'UC4QobU6STFB0P71PMvOGN5A'.")
       rescue ex

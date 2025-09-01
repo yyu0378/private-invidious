@@ -41,7 +41,7 @@
     "Time (h:mm:ss):": "Hora (h:mm:ss):",
     "Text CAPTCHA": "Mudar para um desafio de texto",
     "Image CAPTCHA": "Mudar para um desafio visual",
-    "Sign In": "Entrar",
+    "Sign In": "Fazer login",
     "Register": "Criar conta",
     "E-mail": "E-mail",
     "Preferences": "Preferências",
@@ -474,7 +474,7 @@
     "Spanish (auto-generated)": "Espanhol (gerado automaticamente)",
     "Spanish (Mexico)": "Espanhol (México)",
     "search_filters_duration_option_none": "Qualquer duração",
-    "search_message_use_another_instance": " Você também pode <a href=\"`x`\">pesquisar em outra instância</a>.",
+    "search_message_use_another_instance": "Você também pode <a href=\"`x`\">pesquisar em outra instância</a>.",
     "Spanish (Spain)": "Espanhol (Espanha)",
     "Turkish (auto-generated)": "Turco (gerado automaticamente)",
     "search_filters_duration_option_medium": "Médio (4 - 20 minutos)",
@@ -513,5 +513,10 @@
     "Answer": "Resposta",
     "carousel_slide": "Slide {{current}} de {{total}}",
     "carousel_skip": "Ignorar carrossel",
-    "carousel_go_to": "Ir ao slide `x`"
+    "carousel_go_to": "Ir ao slide `x`",
+    "preferences_preload_label": "Pré-carregar dados do vídeo: ",
+    "Filipino (auto-generated)": "Filipino (gerado automaticamente)",
+    "channel_tab_posts_label": "Postagens",
+    "First page": "Primeira página",
+    "channel_tab_courses_label": "Cursos"
 }

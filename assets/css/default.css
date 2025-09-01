@@ -278,7 +278,14 @@ div.thumbnail > .bottom-right-overlay {
   display: inline;
 }
 
-.searchbar .pure-form fieldset { padding: 0; }
+.searchbar .pure-form {
+  display: flex;
+}
+
+.searchbar .pure-form fieldset {
+  padding: 0;
+  flex: 1;
+}
 
 .searchbar input[type="search"] {
 	width: 100%;
@@ -308,6 +315,16 @@ input[type="search"]::-webkit-search-cancel-button {
   width: 14px;
   background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7MK6iAAAAn0lEQVR42u3UMQrDMBBEUZ9WfQqDmm22EaTyjRMHAlM5K+Y7lb0wnUZPIKHlnutOa+25Z4D++MRBX98MD1V/trSppLKHqj9TTBWKcoUqffbUcbBBEhTjBOV4ja4l4OIAZThEOV6jHO8ARXD+gPPvKMABinGOrnu6gTNUawrcQKNCAQ7QeTxORzle3+sDfjJpPCqhJh7GixZq4rHcc9l5A9qZ+WeBhgEuAAAAAElFTkSuQmCC);
   background-size: 14px;
+}
+
+.searchbar #searchbutton {
+  border: none;
+  background: none;
+  margin-top: 0;
+}
+
+.searchbar #searchbutton:hover {
+  color: rgb(0, 182, 240);
 }
 
 .user-field {
@@ -533,6 +550,10 @@ span > select {
   color: #565d64;
 }
 
+.light-theme .error-card {
+  border: 1px solid black;
+}
+
 @media (prefers-color-scheme: light) {
   .no-theme a:hover,
   .no-theme a:active,
@@ -578,6 +599,10 @@ span > select {
 
   .light-theme .pure-menu-heading {
     color: #565d64;
+  }
+
+  .no-theme .error-card {
+    border: 1px solid black;
   }
 }
 
@@ -641,6 +666,10 @@ body.dark-theme {
   color: inherit;
 }
 
+.dark-theme .error-card {
+  border: 1px solid #5e5e5e;
+}
+
 @media (prefers-color-scheme: dark) {
   .no-theme a:hover,
   .no-theme a:active,
@@ -701,6 +730,10 @@ body.dark-theme {
 
   .no-theme footer a {
     color: #adadad !important;
+  }
+
+  .no-theme .error-card {
+    border: 1px solid #5e5e5e;
   }
 }
 
@@ -798,4 +831,58 @@ h1, h2, h3, h4, h5, p,
 
 #download_widget {
     width: 100%;
+}
+
+.error-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 25px;
+  margin-bottom: 1em;
+  border-radius: 10px;
+  box-sizing: border-box;
+  height: 100%;
+}
+
+.error-card > .explanation {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  grid-template-rows: 1fr max-content;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 4px;
+}
+
+.error-card > .explanation > i {
+  color: #f44;
+  font-size: 24px;
+  grid-area: 1 / 1 / 2 / 2;
+}
+
+.error-card > .explanation > h4 {
+  grid-area: 1 / 2 / 2 / 3;
+  margin: 0;
+}
+
+.error-card > .explanation > p {
+  grid-area: 2 / 2 / 3 / 3;
+  margin: 0;
+}
+
+.error-card details {
+  margin-top: 10px;
+  width: 100%;
+}
+
+.error-card summary {
+  width: 100%;
+}
+
+.error-card pre {
+  height: 300px;
+}
+
+.error-issue-template {
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.12345);
 }

@@ -20,10 +20,11 @@ module Invidious::Routes::Channels
     sort_by = env.params.query["sort_by"]?.try &.downcase
 
     if channel.auto_generated
+      sort_by ||= "last"
       sort_options = {"last", "oldest", "newest"}
 
       items, next_continuation = fetch_channel_playlists(
-        channel.ucid, channel.author, continuation, (sort_by || "last")
+        channel.ucid, channel.author, continuation, sort_by
       )
 
       items.uniq! do |item|
@@ -36,12 +37,26 @@ module Invidious::Routes::Channels
       items = items.select(SearchPlaylist)
       items.each(&.author = "")
     else
-      sort_options = {"newest", "oldest", "popular"}
-
       # Fetch items and continuation token
-      items, next_continuation = Channel::Tabs.get_videos(
-        channel, continuation: continuation, sort_by: (sort_by || "newest")
-      )
+      if channel.is_age_gated
+        sort_by = ""
+        sort_options = [] of String
+        begin
+          playlist = get_playlist(channel.ucid.sub("UC", "UULF"))
+          items = get_playlist_videos(playlist, offset: 0)
+        rescue ex : InfoException
+          # playlist doesnt exist.
+          items = [] of PlaylistVideo
+        end
+        next_continuation = nil
+      else
+        sort_by ||= "newest"
+        sort_options = {"newest", "oldest", "popular"}
+
+        items, next_continuation = Channel::Tabs.get_60_videos(
+          channel, continuation: continuation, sort_by: sort_by
+        )
+      end
     end
 
     selected_tab = Frontend::ChannelPage::TabsAvailable::Videos
@@ -58,14 +73,26 @@ module Invidious::Routes::Channels
       return env.redirect "/channel/#{channel.ucid}"
     end
 
-    # TODO: support sort option for shorts
-    sort_by = ""
-    sort_options = [] of String
+    if channel.is_age_gated
+      sort_by = ""
+      sort_options = [] of String
+      begin
+        playlist = get_playlist(channel.ucid.sub("UC", "UUSH"))
+        items = get_playlist_videos(playlist, offset: 0)
+      rescue ex : InfoException
+        # playlist doesnt exist.
+        items = [] of PlaylistVideo
+      end
+      next_continuation = nil
+    else
+      sort_by = env.params.query["sort_by"]?.try &.downcase || "newest"
+      sort_options = {"newest", "oldest", "popular"}
 
-    # Fetch items and continuation token
-    items, next_continuation = Channel::Tabs.get_shorts(
-      channel, continuation: continuation
-    )
+      # Fetch items and continuation token
+      items, next_continuation = Channel::Tabs.get_shorts(
+        channel, continuation: continuation, sort_by: sort_by
+      )
+    end
 
     selected_tab = Frontend::ChannelPage::TabsAvailable::Shorts
     templated "channel"
@@ -81,14 +108,26 @@ module Invidious::Routes::Channels
       return env.redirect "/channel/#{channel.ucid}"
     end
 
-    # TODO: support sort option for livestreams
-    sort_by = ""
-    sort_options = [] of String
+    if channel.is_age_gated
+      sort_by = ""
+      sort_options = [] of String
+      begin
+        playlist = get_playlist(channel.ucid.sub("UC", "UULV"))
+        items = get_playlist_videos(playlist, offset: 0)
+      rescue ex : InfoException
+        # playlist doesnt exist.
+        items = [] of PlaylistVideo
+      end
+      next_continuation = nil
+    else
+      sort_by = env.params.query["sort_by"]?.try &.downcase || "newest"
+      sort_options = {"newest", "oldest", "popular"}
 
-    # Fetch items and continuation token
-    items, next_continuation = Channel::Tabs.get_60_livestreams(
-      channel, continuation: continuation
-    )
+      # Fetch items and continuation token
+      items, next_continuation = Channel::Tabs.get_60_livestreams(
+        channel, continuation: continuation, sort_by: sort_by
+      )
+    end
 
     selected_tab = Frontend::ChannelPage::TabsAvailable::Streams
     templated "channel"
@@ -158,7 +197,29 @@ module Invidious::Routes::Channels
     templated "channel"
   end
 
+  def self.courses(env)
+    data = self.fetch_basic_information(env)
+    return data if !data.is_a?(Tuple)
+
+    locale, user, subscriptions, continuation, ucid, channel = data
+
+    sort_by = ""
+    sort_options = [] of String
+
+    items, next_continuation = fetch_channel_courses(
+      channel.ucid, channel.author, continuation
+    )
+
+    items = items.select(SearchPlaylist)
+    items.each(&.author = "")
+
+    selected_tab = Frontend::ChannelPage::TabsAvailable::Courses
+    templated "channel"
+  end
+
   def self.community(env)
+    return env.redirect env.request.path.sub("posts", "community") if env.request.path.split("/").last == "posts"
+
     data = self.fetch_basic_information(env)
     if !data.is_a?(Tuple)
       return data
@@ -175,7 +236,7 @@ module Invidious::Routes::Channels
 
     continuation = env.params.query["continuation"]?
 
-    if !channel.tabs.includes? "community"
+    if !channel.tabs.includes? "community" && "posts"
       return env.redirect "/channel/#{channel.ucid}"
     end
 
@@ -223,7 +284,7 @@ module Invidious::Routes::Channels
       response = YoutubeAPI.resolve_url("https://www.youtube.com/post/#{id}")
       return error_template(400, "Invalid post ID") if response["error"]?
 
-      ucid = response.dig("endpoint", "browseEndpoint", "browseId").as_s
+      ucid = decode_ucid_from_post_protobuf(response.dig("endpoint", "browseEndpoint", "params").as_s)
       post_response = fetch_channel_community_post(ucid, id, locale, "json", thin_mode)
     end
 
@@ -268,7 +329,8 @@ module Invidious::Routes::Channels
 
   private KNOWN_TABS = {
     "home", "videos", "shorts", "streams", "podcasts",
-    "releases", "playlists", "community", "channels", "about",
+    "releases", "courses", "playlists", "community", "channels", "about",
+    "posts",
   }
 
   # Redirects brand url channels to a normal /channel/:ucid route

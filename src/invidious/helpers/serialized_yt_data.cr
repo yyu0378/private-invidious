@@ -1,3 +1,16 @@
+@[Flags]
+enum VideoBadges
+  LiveNow
+  Premium
+  ThreeD
+  FourK
+  New
+  EightK
+  VR180
+  VR360
+  ClosedCaptions
+end
+
 struct SearchVideo
   include DB::Serializable
 
@@ -9,10 +22,10 @@ struct SearchVideo
   property views : Int64
   property description_html : String
   property length_seconds : Int32
-  property live_now : Bool
-  property premium : Bool
   property premiere_timestamp : Time?
   property author_verified : Bool
+  property author_thumbnail : String?
+  property badges : VideoBadges
 
   def to_xml(auto_generated, query_params, xml : XML::Builder)
     query_params["v"] = self.id
@@ -76,6 +89,24 @@ struct SearchVideo
       json.field "authorUrl", "/channel/#{self.ucid}"
       json.field "authorVerified", self.author_verified
 
+      author_thumbnail = self.author_thumbnail
+
+      if author_thumbnail
+        json.field "authorThumbnails" do
+          json.array do
+            qualities = {32, 48, 76, 100, 176, 512}
+
+            qualities.each do |quality|
+              json.object do
+                json.field "url", author_thumbnail.gsub(/=s\d+/, "=s#{quality}")
+                json.field "width", quality
+                json.field "height", quality
+              end
+            end
+          end
+        end
+      end
+
       json.field "videoThumbnails" do
         Invidious::JSONify::APIv1.thumbnails(json, self.id)
       end
@@ -88,13 +119,20 @@ struct SearchVideo
       json.field "published", self.published.to_unix
       json.field "publishedText", translate(locale, "`x` ago", recode_date(self.published, locale))
       json.field "lengthSeconds", self.length_seconds
-      json.field "liveNow", self.live_now
-      json.field "premium", self.premium
-      json.field "isUpcoming", self.is_upcoming
+      json.field "liveNow", self.badges.live_now?
+      json.field "premium", self.badges.premium?
+      json.field "isUpcoming", self.upcoming?
 
       if self.premiere_timestamp
         json.field "premiereTimestamp", self.premiere_timestamp.try &.to_unix
       end
+      json.field "isNew", self.badges.new?
+      json.field "is4k", self.badges.four_k?
+      json.field "is8k", self.badges.eight_k?
+      json.field "isVr180", self.badges.vr180?
+      json.field "isVr360", self.badges.vr360?
+      json.field "is3d", self.badges.three_d?
+      json.field "hasCaptions", self.badges.closed_captions?
     end
   end
 
@@ -109,7 +147,7 @@ struct SearchVideo
     to_json(nil, json)
   end
 
-  def is_upcoming
+  def upcoming?
     premiere_timestamp ? true : false
   end
 end
@@ -204,7 +242,7 @@ struct SearchChannel
 
           qualities.each do |quality|
             json.object do
-              json.field "url", self.author_thumbnail.gsub(/=\d+/, "=s#{quality}")
+              json.field "url", self.author_thumbnail.gsub(/=s\d+/, "=s#{quality}")
               json.field "width", quality
               json.field "height", quality
             end
@@ -253,6 +291,55 @@ struct SearchHashtag
   end
 end
 
+# A `ProblematicTimelineItem` is a `SearchItem` created by Invidious that
+# represents an item that caused an exception during parsing.
+#
+# This is not a parsed object from YouTube but rather an Invidious-only type
+# created to gracefully communicate parse errors without throwing away
+# the rest of the (hopefully) successfully parsed item on a page.
+struct ProblematicTimelineItem
+  property parse_exception : Exception
+  property id : String
+
+  def initialize(@parse_exception)
+    @id = Random.new.hex(8)
+  end
+
+  def to_json(locale : String?, json : JSON::Builder)
+    json.object do
+      json.field "type", "parse-error"
+      json.field "errorMessage", @parse_exception.message
+      json.field "errorBacktrace", @parse_exception.inspect_with_backtrace
+    end
+  end
+
+  # Provides compatibility with PlaylistVideo
+  def to_json(json : JSON::Builder, *args, **kwargs)
+    return to_json("", json)
+  end
+
+  def to_xml(env, locale, xml : XML::Builder)
+    xml.element("entry") do
+      xml.element("id") { xml.text "iv-err-#{@id}" }
+      xml.element("title") { xml.text "Parse Error: This item has failed to parse" }
+      xml.element("updated") { xml.text Time.utc.to_rfc3339 }
+
+      xml.element("content", type: "xhtml") do
+        xml.element("div", xmlns: "http://www.w3.org/1999/xhtml") do
+          xml.element("div") do
+            xml.element("h4") { translate(locale, "timeline_parse_error_placeholder_heading") }
+            xml.element("p") { translate(locale, "timeline_parse_error_placeholder_message") }
+          end
+
+          xml.element("pre") do
+            get_issue_template(env, @parse_exception)
+          end
+        end
+      end
+    end
+  end
+end
+
 class Category
   include DB::Serializable
 
@@ -295,4 +382,4 @@ struct Continuation
   end
 end
 
-alias SearchItem = SearchVideo | SearchChannel | SearchPlaylist | SearchHashtag | Category
+alias SearchItem = SearchVideo | SearchChannel | SearchPlaylist | SearchHashtag | Category | ProblematicTimelineItem

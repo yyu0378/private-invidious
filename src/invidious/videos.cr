@@ -15,7 +15,7 @@ struct Video
   # NOTE: don't forget to bump this number if any change is made to
   # the `params` structure in videos/parser.cr!!!
   #
-  SCHEMA_VERSION = 2
+  SCHEMA_VERSION = 3
 
   property id : String
 
@@ -25,12 +25,6 @@ struct Video
 
   @[DB::Field(ignore: true)]
   @captions = [] of Invidious::Videos::Captions::Metadata
-
-  @[DB::Field(ignore: true)]
-  property adaptive_fmts : Array(Hash(String, JSON::Any))?
-
-  @[DB::Field(ignore: true)]
-  property fmt_stream : Array(Hash(String, JSON::Any))?
 
   @[DB::Field(ignore: true)]
   property description : String?
@@ -98,45 +92,24 @@ struct Video
 
   # Methods for parsing streaming data
 
-  def fmt_stream
-    return @fmt_stream.as(Array(Hash(String, JSON::Any))) if @fmt_stream
-
-    fmt_stream = info["streamingData"]?.try &.["formats"]?.try &.as_a.map &.as_h || [] of Hash(String, JSON::Any)
-    fmt_stream.each do |fmt|
-      if s = (fmt["cipher"]? || fmt["signatureCipher"]?).try { |h| HTTP::Params.parse(h.as_s) }
-        s.each do |k, v|
-          fmt[k] = JSON::Any.new(v)
-        end
-        fmt["url"] = JSON::Any.new("#{fmt["url"]}#{DECRYPT_FUNCTION.decrypt_signature(fmt)}")
-      end
-
-      fmt["url"] = JSON::Any.new("#{fmt["url"]}&host=#{URI.parse(fmt["url"].as_s).host}")
-      fmt["url"] = JSON::Any.new("#{fmt["url"]}&region=#{self.info["region"]}") if self.info["region"]?
+  def fmt_stream : Array(Hash(String, JSON::Any))
+    if formats = info.dig?("streamingData", "formats")
+      return formats
+        .as_a.map(&.as_h)
+        .sort_by! { |f| f["width"]?.try &.as_i || 0 }
+    else
+      return [] of Hash(String, JSON::Any)
     end
-
-    fmt_stream.sort_by! { |f| f["width"]?.try &.as_i || 0 }
-    @fmt_stream = fmt_stream
-    return @fmt_stream.as(Array(Hash(String, JSON::Any)))
   end
 
-  def adaptive_fmts
-    return @adaptive_fmts.as(Array(Hash(String, JSON::Any))) if @adaptive_fmts
-    fmt_stream = info["streamingData"]?.try &.["adaptiveFormats"]?.try &.as_a.map &.as_h || [] of Hash(String, JSON::Any)
-    fmt_stream.each do |fmt|
-      if s = (fmt["cipher"]? || fmt["signatureCipher"]?).try { |h| HTTP::Params.parse(h.as_s) }
-        s.each do |k, v|
-          fmt[k] = JSON::Any.new(v)
-        end
-        fmt["url"] = JSON::Any.new("#{fmt["url"]}#{DECRYPT_FUNCTION.decrypt_signature(fmt)}")
-      end
-
-      fmt["url"] = JSON::Any.new("#{fmt["url"]}&host=#{URI.parse(fmt["url"].as_s).host}")
-      fmt["url"] = JSON::Any.new("#{fmt["url"]}&region=#{self.info["region"]}") if self.info["region"]?
+  def adaptive_fmts : Array(Hash(String, JSON::Any))
+    if formats = info.dig?("streamingData", "adaptiveFormats")
+      return formats
+        .as_a.map(&.as_h)
+        .sort_by! { |f| f["width"]?.try &.as_i || f["audioTrack"]?.try { |a| a["audioIsDefault"]?.try { |v| v.as_bool ? -1 : 0 } } || 0 }
+    else
+      return [] of Hash(String, JSON::Any)
     end
-
-    fmt_stream.sort_by! { |f| f["width"]?.try &.as_i || 0 }
-    @adaptive_fmts = fmt_stream
-    return @adaptive_fmts.as(Array(Hash(String, JSON::Any)))
   end
 
   def video_streams
@@ -150,65 +123,8 @@ struct Video
   # Misc. methods
 
   def storyboards
-    storyboards = info.dig?("storyboards", "playerStoryboardSpecRenderer", "spec")
-      .try &.as_s.split("|")
-
-    if !storyboards
-      if storyboard = info.dig?("storyboards", "playerLiveStoryboardSpecRenderer", "spec").try &.as_s
-        return [{
-          url:               storyboard.split("#")[0],
-          width:             106,
-          height:            60,
-          count:             -1,
-          interval:          5000,
-          storyboard_width:  3,
-          storyboard_height: 3,
-          storyboard_count:  -1,
-        }]
-      end
-    end
-
-    items = [] of NamedTuple(
-      url: String,
-      width: Int32,
-      height: Int32,
-      count: Int32,
-      interval: Int32,
-      storyboard_width: Int32,
-      storyboard_height: Int32,
-      storyboard_count: Int32)
-
-    return items if !storyboards
-
-    url = URI.parse(storyboards.shift)
-    params = HTTP::Params.parse(url.query || "")
-
-    storyboards.each_with_index do |sb, i|
-      width, height, count, storyboard_width, storyboard_height, interval, _, sigh = sb.split("#")
-      params["sigh"] = sigh
-      url.query = params.to_s
-
-      width = width.to_i
-      height = height.to_i
-      count = count.to_i
-      interval = interval.to_i
-      storyboard_width = storyboard_width.to_i
-      storyboard_height = storyboard_height.to_i
-      storyboard_count = (count / (storyboard_width * storyboard_height)).ceil.to_i
-
-      items << {
-        url:               url.to_s.sub("$L", i).sub("$N", "M$M"),
-        width:             width,
-        height:            height,
-        count:             count,
-        interval:          interval,
-        storyboard_width:  storyboard_width,
-        storyboard_height: storyboard_height,
-        storyboard_count:  storyboard_count,
-      }
-    end
-
-    items
+    container = info.dig?("storyboards") || JSON::Any.new("{}")
+    return IV::Videos::Storyboard.from_yt_json(container, self.length_seconds)
   end
 
   def paid
@@ -250,10 +166,10 @@ struct Video
   end
 
   def genre_url : String?
-    info["genreUcid"]? ? "/channel/#{info["genreUcid"]}" : nil
+    info["genreUcid"].try &.as_s? ? "/channel/#{info["genreUcid"]}" : nil
   end
 
-  def is_vr : Bool?
+  def vr? : Bool?
     return {"EQUIRECTANGULAR", "MESH"}.includes? self.projection_type
   end
 
@@ -334,6 +250,21 @@ struct Video
     {% if flag?(:debug_macros) %} {{debug}} {% end %}
   end
 
+  # Macro to generate ? and = accessor methods for attributes in `info`
+  private macro predicate_bool(method_name, name)
+    # Return {{name.stringify}} from `info`
+    def {{method_name.id.underscore}}? : Bool
+      return info[{{name.stringify}}]?.try &.as_bool || false
+    end
+
+    # Update {{name.stringify}} into `info`
+    def {{method_name.id.underscore}}=(value : Bool)
+      info[{{name.stringify}}] = JSON::Any.new(value)
+    end
+
+    {% if flag?(:debug_macros) %} {{debug}} {% end %}
+  end
+
   # Method definitions, using the macros above
 
   getset_string author
@@ -355,11 +286,12 @@ struct Video
   getset_i64 likes
   getset_i64 views
 
+  # TODO: Make predicate_bool the default as to adhere to Crystal conventions
   getset_bool allowRatings
   getset_bool authorVerified
   getset_bool isFamilyFriendly
   getset_bool isListed
-  getset_bool isUpcoming
+  predicate_bool upcoming, isUpcoming
 end
 
 def get_video(id, refresh = true, region = nil, force_refresh = false)
@@ -393,10 +325,6 @@ end
 
 def fetch_video(id, region)
   info = extract_video_info(video_id: id)
-
-  allowed_regions = info
-    .dig?("microformat", "playerMicroformatRenderer", "availableCountries")
-    .try &.as_a.map &.as_s || [] of String
 
   if reason = info["reason"]?
     if reason == "Video unavailable"

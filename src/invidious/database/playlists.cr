@@ -91,7 +91,7 @@ module Invidious::Database::Playlists
   end
 
   # -------------------
-  #  Salect
+  #  Select
   # -------------------
 
   def select(*, id : String) : InvidiousPlaylist?
@@ -113,7 +113,7 @@ module Invidious::Database::Playlists
   end
 
   # -------------------
-  #  Salect (filtered)
+  #  Select (filtered)
   # -------------------
 
   def select_like_iv(email : String) : Array(InvidiousPlaylist)
@@ -140,6 +140,7 @@ module Invidious::Database::Playlists
     request = <<-SQL
       SELECT id,title FROM playlists
       WHERE author = $1 AND id LIKE 'IV%'
+      ORDER BY title
     SQL
 
     PG_DB.query_all(request, email, as: {String, String})
@@ -212,7 +213,7 @@ module Invidious::Database::PlaylistVideos
   end
 
   # -------------------
-  #  Salect
+  #  Select
   # -------------------
 
   def select(plid : String, index : VideoIndex, offset, limit = 100) : Array(PlaylistVideo)

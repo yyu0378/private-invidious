@@ -38,28 +38,36 @@ jobs:
       matrix:
         stable: [true]
         crystal:
-          - 1.7.3
-          - 1.8.2
-          - 1.9.2
-          - 1.10.1
+          - 1.12.2
+          - 1.13.3
+          - 1.14.1
+          - 1.15.1
+          - 1.16.3
         include:
           - crystal: nightly
             stable: false
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: true
 
+      - name: Install required APT packages
+        run: |
+          sudo apt install -y libsqlite3-dev
+        shell: bash
+
       - name: Install Crystal
-        uses: crystal-lang/install-crystal@v1.8.0
+        uses: crystal-lang/install-crystal@v1.8.2
         with:
           crystal: ${{ matrix.crystal }}
 
       - name: Cache Shards
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
-          path: ./lib
+          path: |
+            ./lib
+            ./bin
           key: shards-${{ hashFiles('shard.lock') }}
 
       - name: Install Shards
@@ -71,7 +79,80 @@ jobs:
       - name: Run tests
         run: crystal spec
 
-      - name: Run lint
+      - name: Build
+        run: crystal build --warnings all --error-on-warnings --error-trace src/invidious.cr
+
+  build-docker:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: "AMD64"
+            # GitHub doesn't have a ubuntu-latest-arm runner
+          - os: ubuntu-24.04-arm
+            name: "ARM64"
+
+    name: Test ${{ matrix.name }} Docker build
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Use ARM64 Dockerfile if ARM64
+        if: ${{ matrix.name }} == "ARM64"
+        run: sed -i 's/Dockerfile/Dockerfile.arm64/' docker-compose.yml
+
+      - name: Build Docker
+        run: docker compose build
+
+      - name: Change hmac_key on docker-compose.yml
+        run: sed -i '/hmac_key/s/CHANGE_ME!!/docker-build-hmac-key/' docker-compose.yml
+
+      - name: Run Docker
+        run: docker compose up -d
+
+      - name: Test Docker
+        id: test
+        run: curl -If http://localhost:3000 --retry 5 --retry-delay 1 --retry-all-errors
+
+      - name: Print Invidious container logs
+        # Tells Github Actions to always run this step regardless of whether the previous step has failed
+        # Without this expression this step would simply be skipped when the previous step fails.
+        if: success() || steps.test.conclusion == 'failure'
+        run: docker compose logs
+
+  lint:
+
+    runs-on: ubuntu-latest
+
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - name: Install Crystal
+        id: lint_step_install_crystal
+        uses: crystal-lang/install-crystal@v1.8.2
+        with:
+          crystal: latest
+
+      - name: Cache Shards
+        uses: actions/cache@v4
+        with:
+          path: |
+            ./lib
+            ./bin
+          key: shards-${{ hashFiles('shard.lock') }}-${{ steps.lint_step_install_crystal.outputs.crystal }}
+
+      - name: Install Shards
+        run: |
+          if ! shards check; then
+            shards install
+          fi
+
+      - name: Check Crystal formatter compliance
         run: |
           if ! crystal tool format --check; then
             crystal tool format
@@ -79,49 +160,5 @@ jobs:
             exit 1
           fi
 
-      - name: Build
-        run: crystal build --warnings all --error-on-warnings --error-trace src/invidious.cr
-
-  build-docker:
-
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Build Docker
-        run: docker-compose build --build-arg release=0
-
-      - name: Run Docker
-        run: docker-compose up -d
-
-      - name: Test Docker
-        run: while curl -Isf http://localhost:3000; do sleep 1; done
-
-  build-docker-arm64:
-
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker ARM64 image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: docker/Dockerfile.arm64
-          platforms: linux/arm64/v8
-          build-args: release=0
-
-      - name: Test Docker
-        run: while curl -Isf http://localhost:3000; do sleep 1; done
-
-
+      - name: Run Ameba linter
+        run: bin/ameba

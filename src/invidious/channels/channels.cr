@@ -223,7 +223,7 @@ def fetch_channel(ucid, pull_all_videos : Bool)
     length_seconds = channel_video.try &.length_seconds
     length_seconds ||= 0
 
-    live_now = channel_video.try &.live_now
+    live_now = channel_video.try &.badges.live_now?
     live_now ||= false
 
     premiere_timestamp = channel_video.try &.premiere_timestamp
@@ -232,7 +232,7 @@ def fetch_channel(ucid, pull_all_videos : Bool)
       id:                 video_id,
       title:              title,
       published:          published,
-      updated:            Time.utc,
+      updated:            updated,
       ucid:               ucid,
       author:             author,
       length_seconds:     length_seconds,
@@ -249,11 +249,7 @@ def fetch_channel(ucid, pull_all_videos : Bool)
 
     if was_insert
       LOGGER.trace("fetch_channel: #{ucid} : video #{video_id} : Inserted, updating subscriptions")
-      if CONFIG.enable_user_notifications
-        Invidious::Database::Users.add_notification(video)
-      else
-        Invidious::Database::Users.feed_needs_update(video)
-      end
+      NOTIFICATION_CHANNEL.send(VideoNotification.from_video(video))
     else
       LOGGER.trace("fetch_channel: #{ucid} : video #{video_id} : Updated")
     end
@@ -275,7 +271,7 @@ def fetch_channel(ucid, pull_all_videos : Bool)
           ucid:               video.ucid,
           author:             video.author,
           length_seconds:     video.length_seconds,
-          live_now:           video.live_now,
+          live_now:           video.badges.live_now?,
           premiere_timestamp: video.premiere_timestamp,
           views:              video.views,
         })
@@ -285,11 +281,7 @@ def fetch_channel(ucid, pull_all_videos : Bool)
         if Time.utc - video.published > 1.minute
           was_insert = Invidious::Database::ChannelVideos.insert(video)
           if was_insert
-            if CONFIG.enable_user_notifications
-              Invidious::Database::Users.add_notification(video)
-            else
-              Invidious::Database::Users.feed_needs_update(video)
-            end
+            NOTIFICATION_CHANNEL.send(VideoNotification.from_video(video))
           end
         end
       end

@@ -46,8 +46,14 @@ struct PlaylistVideo
     XML.build { |xml| to_xml(xml) }
   end
 
+  def to_json(locale : String?, json : JSON::Builder)
+    to_json(json)
+  end
+
   def to_json(json : JSON::Builder, index : Int32? = nil)
     json.object do
+      json.field "type", "video"
+
       json.field "title", self.title
       json.field "videoId", self.id
 
@@ -67,6 +73,7 @@ struct PlaylistVideo
       end
 
       json.field "lengthSeconds", self.length_seconds
+      json.field "liveNow", self.live_now
     end
   end
 
@@ -263,7 +270,7 @@ end
 
 def subscribe_playlist(user, playlist)
   playlist = InvidiousPlaylist.new({
-    title:       playlist.title.byte_slice(0, 150),
+    title:       playlist.title[..150],
     id:          playlist.id,
     author:      user.email,
     description: "", # Max 5000 characters
@@ -366,6 +373,8 @@ def fetch_playlist(plid : String)
 
     if text.includes? "video"
       video_count = text.gsub(/\D/, "").to_i? || 0
+    elsif text.includes? "episode"
+      video_count = text.gsub(/\D/, "").to_i? || 0
     elsif text.includes? "view"
       views = text.gsub(/\D/, "").to_i64? || 0_i64
     else
@@ -423,7 +432,7 @@ def get_playlist_videos(playlist : InvidiousPlaylist | Playlist, offset : Int32,
       offset = initial_data.dig?("contents", "twoColumnWatchNextResults", "playlist", "playlist", "currentIndex").try &.as_i || offset
     end
 
-    videos = [] of PlaylistVideo
+    videos = [] of PlaylistVideo | ProblematicTimelineItem
 
     until videos.size >= 200 || videos.size == playlist.video_count || offset >= playlist.video_count
       # 100 videos per request
@@ -439,7 +448,7 @@ def get_playlist_videos(playlist : InvidiousPlaylist | Playlist, offset : Int32,
 end
 
 def extract_playlist_videos(initial_data : Hash(String, JSON::Any))
-  videos = [] of PlaylistVideo
+  videos = [] of PlaylistVideo | ProblematicTimelineItem
 
   if initial_data["contents"]?
     tabs = initial_data["contents"]["twoColumnBrowseResultsRenderer"]["tabs"]
@@ -491,12 +500,14 @@ def extract_playlist_videos(initial_data : Hash(String, JSON::Any))
         index:          index,
       })
     end
+  rescue ex
+    videos << ProblematicTimelineItem.new(parse_exception: ex)
   end
 
   return videos
 end
 
-def template_playlist(playlist)
+def template_playlist(playlist, listen)
   html = <<-END_HTML
   <h3>
     <a href="/playlist?list=#{playlist["playlistId"]}">
@@ -510,7 +521,7 @@ def template_playlist(playlist)
   playlist["videos"].as_a.each do |video|
     html += <<-END_HTML
       <li class="pure-menu-item" id="#{video["videoId"]}">
-        <a href="/watch?v=#{video["videoId"]}&list=#{playlist["playlistId"]}&index=#{video["index"]}">
+        <a href="/watch?v=#{video["videoId"]}&list=#{playlist["playlistId"]}&index=#{video["index"]}#{listen ? "&listen=1" : ""}">
           <div class="thumbnail">
               <img loading="lazy" class="thumbnail" src="/vi/#{video["videoId"]}/mqdefault.jpg" alt="" />
               <p class="length">#{recode_length_seconds(video["lengthSeconds"].as_i)}</p>

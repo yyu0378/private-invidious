@@ -27,6 +27,7 @@ class Kemal::RouteHandler
   # Processes the route if it's a match. Otherwise renders 404.
   private def process_request(context)
     raise Kemal::Exceptions::RouteNotFound.new(context) unless context.route_found?
+    return if context.response.closed?
     content = context.route.handler.call(context)
 
     if !Kemal.config.error_handlers.empty? && Kemal.config.error_handlers.has_key?(context.response.status_code) && exclude_match?(context)
@@ -97,7 +98,7 @@ class AuthHandler < Kemal::Handler
       if token = env.request.headers["Authorization"]?
         token = JSON.parse(URI.decode_www_form(token.lchop("Bearer ")))
         session = URI.decode_www_form(token["session"].as_s)
-        scopes, expire, signature = validate_request(token, session, env.request, HMAC_KEY, nil)
+        scopes, _, _ = validate_request(token, session, env.request, HMAC_KEY, nil)
 
         if email = Invidious::Database::SessionIDs.select_email(session)
           user = Invidious::Database::Users.select!(email: email)
